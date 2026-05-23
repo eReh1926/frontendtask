@@ -8,6 +8,7 @@
   "dependencies": {
     "@reduxjs/toolkit": "^2.2.0",
     "@tailwindcss/postcss": "^4.2.2",
+    "jsonwebtoken": "^9.0.3",
     "next": "latest",
     "postcss": "^8.5.9",
     "react": "^18.2.0",
@@ -16,6 +17,7 @@
     "tailwindcss": "^4.2.2"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "20.2.5",
     "@types/react": "18.2.37",
     "@types/react-dom": "^18.2.18",
