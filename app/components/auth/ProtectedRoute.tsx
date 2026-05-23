@@ -20,7 +20,7 @@ export default function ProtectedRoute({
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
 
   useEffect(() => {
-    // Try to restore session from storage on mount
+    // This is to try and restore the session from storage on mount (are you actually logged in?)
     dispatch(restoreSession()).then((result) => {
       if (result.meta.requestStatus === "rejected") {
         router.replace(redirectTo);

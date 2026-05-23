@@ -29,11 +29,11 @@ export default function LoginPage() {
     const [darkMode, setDarkMode] = useState(true);
     const [isExiting, setIsExiting] = useState(false);
 
-    // Field-level validation
+    // For field level validation(individual field checker)
     const [touched, setTouched] = useState({ email: false, password: false });
     const [fieldErrors, setFieldErrors] = useState({ email: "", password: "" });
 
-    // Rate limit countdown
+    // The rate limit countdown(too many failed attempts)
     const [countdown, setCountdown] = useState(0);
     const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -92,8 +92,6 @@ export default function LoginPage() {
         }
         if (!password) {
             errors.password = "Password is required";
-        } else if (password.length < 6) {
-            errors.password = "Password must be at least 6 characters";
         }
         setFieldErrors(errors);
         return !errors.email && !errors.password;

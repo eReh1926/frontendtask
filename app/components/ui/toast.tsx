@@ -1,3 +1,5 @@
+//in general same tsx but some things are new to me, study it again once
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -74,7 +76,7 @@ function ToastItem({
   );
 }
 
-// Hook for easy toast usage
+// This is a hook for easy toast usage (boilerplate)
 import { useCallback } from "react";
 
 export function useToast() {

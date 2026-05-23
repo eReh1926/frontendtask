@@ -12,6 +12,7 @@ export interface AuthUser {
 export interface AuthState {
     user: AuthUser | null;
     token: string | null;
+    refreshToken: string | null;
     isAuthenticated: boolean;
     isLoading: boolean;
     error: string | null;
@@ -20,7 +21,8 @@ export interface AuthState {
 
 const initialState: AuthState = {
     user: null,
-    token: typeof window !== "undefined" ? localStorage.getItem("auth_token") : null,
+    token: typeof window !== "undefined" ? sessionStorage.getItem("auth_token") : null,
+    refreshToken: typeof window !== "undefined" ? localStorage.getItem("refresh_token") : null,
     isAuthenticated: false,
     isLoading: false,
     error: null,
@@ -62,15 +64,16 @@ export const loginUser = createAsyncThunk(
             }
 
             // Persist token
+            sessionStorage.setItem("auth_token", data.accessToken);
             if (credentials.rememberMe) {
-                localStorage.setItem("auth_token", data.token);
+                localStorage.setItem("refresh_token", data.refreshToken);
                 localStorage.setItem("auth_user", JSON.stringify(data.user));
             } else {
-                sessionStorage.setItem("auth_token", data.token);
+                sessionStorage.setItem("refresh_token", data.refreshToken);
                 sessionStorage.setItem("auth_user", JSON.stringify(data.user));
             }
 
-            return { token: data.token, user: data.user };
+            return { token: data.accessToken, refreshToken: data.refreshToken, user: data.user };
         } catch {
             return rejectWithValue({
                 type: "NETWORK_ERROR",
@@ -82,35 +85,79 @@ export const loginUser = createAsyncThunk(
 
 export const restoreSession = createAsyncThunk(
     "auth/restoreSession",
-    async (_, { rejectWithValue }) => {
+    async (_, { rejectWithValue, dispatch }) => {
         try {
             const token =
-                localStorage.getItem("auth_token") ||
-                sessionStorage.getItem("auth_token");
+                sessionStorage.getItem("auth_token") || localStorage.getItem("auth_token");
+
+            const refreshToken =
+                localStorage.getItem("refresh_token") ||
+                sessionStorage.getItem("refresh_token");
             const userStr =
                 localStorage.getItem("auth_user") ||
                 sessionStorage.getItem("auth_user");
 
-            if (!token || !userStr) return rejectWithValue("No session");
+            if (!userStr) return rejectWithValue("No session");
 
-            // Verify token with backend
-            const response = await fetch("/api/auth/verify", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            // If there is an access token, verify it
+            if (token) {
+                const response = await fetch("/api/auth/verify", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
 
-            if (!response.ok) {
-                // Token invalid or expired — clear storage
-                localStorage.removeItem("auth_token");
-                localStorage.removeItem("auth_user");
-                sessionStorage.removeItem("auth_token");
-                sessionStorage.removeItem("auth_user");
-                return rejectWithValue("Session invalid");
+                if (response.ok) {
+                    const user = JSON.parse(userStr);
+                    return { token, refreshToken, user };
+                }
             }
 
-            const user = JSON.parse(userStr);
-            return { token, user };
+            // If access token missing or expired, try refresh
+            if (refreshToken) {
+                const result = await dispatch(refreshAccessToken());
+                if (refreshAccessToken.fulfilled.match(result)) {
+                    const user = JSON.parse(userStr);
+                    return { token: result.payload.token, refreshToken, user };
+                }
+            }
+
+            // Both failed — clear storage and reject
+            localStorage.removeItem("auth_token");
+            localStorage.removeItem("refresh_token");
+            localStorage.removeItem("auth_user");
+            sessionStorage.removeItem("auth_token");
+            sessionStorage.removeItem("refresh_token");
+            sessionStorage.removeItem("auth_user");
+
+            return rejectWithValue("Session invalid");
         } catch {
             return rejectWithValue("Session invalid");
+        }
+    }
+);
+
+//use refreshToken to get new access token
+export const refreshAccessToken = createAsyncThunk(
+    "auth/refresh",
+    async (_, { rejectWithValue }) => {
+        try {
+            const refreshToken =
+                localStorage.getItem("refresh_token") ||
+                sessionStorage.getItem("refresh_token");
+            if (!refreshToken) return rejectWithValue("No refresh token");
+            const response = await fetch("/api/auth/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refreshToken }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                return rejectWithValue("Refresh failed");
+            }
+            sessionStorage.setItem("auth_token", data.accessToken);
+
+            return { token: data.accessToken };
+        } catch {
+            return rejectWithValue("Refresh failed");
         }
     }
 );
@@ -122,12 +169,15 @@ const authSlice = createSlice({
         logout(state) {
             state.user = null;
             state.token = null;
+            state.refreshToken = null;
             state.isAuthenticated = false;
             state.error = null;
             state.rateLimitRetryAfter = null;
             localStorage.removeItem("auth_token");
+            localStorage.removeItem("refresh_token");
             localStorage.removeItem("auth_user");
             sessionStorage.removeItem("auth_token");
+            sessionStorage.removeItem("refresh_token");
             sessionStorage.removeItem("auth_user");
         },
         clearError(state) {
@@ -150,6 +200,7 @@ const authSlice = createSlice({
                 state.isLoading = false;
                 state.isAuthenticated = true;
                 state.token = action.payload.token;
+                state.refreshToken = action.payload.refreshToken;
                 state.user = action.payload.user;
                 state.error = null;
             })
@@ -170,12 +221,16 @@ const authSlice = createSlice({
             .addCase(restoreSession.fulfilled, (state, action) => {
                 state.isAuthenticated = true;
                 state.token = action.payload.token;
+                state.refreshToken = action.payload.refreshToken;
                 state.user = action.payload.user;
             })
             .addCase(restoreSession.rejected, (state) => {
                 state.isAuthenticated = false;
                 state.token = null;
                 state.user = null;
+            })
+            .addCase(refreshAccessToken.fulfilled, (state, action) => {
+                state.token = action.payload.token;
             });
     },
 });

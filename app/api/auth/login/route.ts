@@ -5,9 +5,9 @@ import jwt from "jsonwebtoken";
 // In-memory rate limiter
 const attempts = new Map<string, { count: number; resetAt: number }>();
 const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
-// Placeholder creds to be replaced later
+// Placeholder creds ideally to be replaced later
 const DEMO_USER = {
     email: "admin@example.com",
     password: "password123",
@@ -68,14 +68,22 @@ export async function POST(req: NextRequest) {
     attempts.delete(ip);
 
     const secret = process.env.JWT_SECRET!;
-    const token = jwt.sign(
+
+    const accessToken = jwt.sign(
         { id: DEMO_USER.id, email: DEMO_USER.email, role: DEMO_USER.role },
+        secret,
+        { expiresIn: "15m" }
+    );
+
+    const refreshToken = jwt.sign(
+        { id: DEMO_USER.id },
         secret,
         { expiresIn: "7d" }
     );
     return NextResponse.json({
         success: true,
-        token,
+        accessToken,
+        refreshToken,
         user: {
             id: DEMO_USER.id,
             email: DEMO_USER.email,

@@ -1,3 +1,5 @@
+//for ease sake while writing code, like renaming the names (Redux boilerplate)
+
 import { RootState } from "../../store";
 
 export const selectAuth = (state: RootState) => state.auth;
